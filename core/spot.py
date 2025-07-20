@@ -1,7 +1,3 @@
-"""
-Spot (Node) class for the grid system
-"""
-
 import pygame
 import time
 from config.constants import *
@@ -10,7 +6,7 @@ class Spot:
     def __init__(self, row, col, width, total_rows):
         self.row = row
         self.col = col
-        self.priority = None  
+        self.target_priority = None  
         self.x = row * width
         self.y = col * width
         self.color = WHITE
@@ -21,7 +17,7 @@ class Spot:
         self.previous = None
         self.cost = 1
         self.is_traffic_stop = False
-        self.light_state = "green"  # green, yellow, red
+        self.light_state = "green"
 
     def get_pos(self):
         return self.row, self.col
@@ -43,6 +39,9 @@ class Spot:
 
     def is_dynamic(self):
         return self.color == BLUE
+
+    def is_target_spot(self):
+        return self.color == TURQUOISE
 
     def reset(self):
         self.color = self.original_color
@@ -66,6 +65,10 @@ class Spot:
     def make_end(self):
         self.color = TURQUOISE
         self.original_color = TURQUOISE
+
+    def make_target(self, priority):
+        self.target_priority = priority
+        self.make_end()
 
     def make_path(self):
         self.color = PURPLE
@@ -94,7 +97,6 @@ class Spot:
     def draw(self, win):
         pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.width))
 
-        # Draw traffic light indicator if applicable
         if self.is_traffic_stop:
             radius = self.width // 4
             offset = self.width // 4
@@ -116,9 +118,8 @@ class Spot:
             if 0 <= r < self.total_rows and 0 <= c < self.total_rows:
                 neighbor = grid[r][c]
 
-                # Check if neighbor is a red traffic light
-                if neighbor.is_traffic_stop and neighbor.light_state == "red":
-                    continue  # Skip this neighbor if it's a red light
+                if hasattr(neighbor, 'is_traffic_stop') and neighbor.is_traffic_stop and neighbor.light_state == "red":
+                    continue
 
                 if not neighbor.is_barrier():
                     self.neighbors.append(neighbor)

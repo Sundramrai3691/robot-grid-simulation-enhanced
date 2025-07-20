@@ -1,25 +1,18 @@
-"""
-A* pathfinding algorithm implementation
-"""
-
 import math
 from queue import PriorityQueue
 
 def heuristic(a, b):
-    """Calculate heuristic distance between two points"""
     x1, y1 = a.get_pos()
     x2, y2 = b.get_pos()
     return math.hypot(x1 - x2, y1 - y2)
 
 def reconstruct_path(came_from, current, draw):
-    """Reconstruct the path from start to end"""
     while current in came_from:
         current = came_from[current]
         current.make_path()
         draw()
 
-def a_star(draw_func, grid, start, end):
-    """A* pathfinding algorithm"""
+def a_star(draw_func, grid, start, end, known_map=None):
     count = 0
     open_set = PriorityQueue()
     open_set.put((0, count, start))
@@ -40,6 +33,10 @@ def a_star(draw_func, grid, start, end):
             return True
 
         for neighbor in current.neighbors:
+            if known_map is not None:
+                if not known_map[neighbor.row][neighbor.col]:
+                    continue
+            
             dx = abs(current.row - neighbor.row)
             dy = abs(current.col - neighbor.col)
             step_cost = 1.41 if dx + dy == 2 else 1

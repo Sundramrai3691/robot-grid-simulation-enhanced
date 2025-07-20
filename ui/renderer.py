@@ -1,35 +1,25 @@
-"""
-Rendering and drawing functions
-"""
-
 import pygame
 import math
 from config.constants import *
 from config.settings import *
 from core.grid import draw_grid
 
-def draw(win, grid, rows, width, trails, robot_center, robot, barrier_mode=False):
+def draw(win, grid, rows, width, trails, robot_center, robot):
     win.fill(WHITE)
 
-    # Draw grid spots
     for row in grid:
         for spot in row:
             spot.draw(win)
-            if hasattr(spot, 'priority') and spot.priority:
+            if hasattr(spot, 'target_priority') and spot.target_priority:
                 font = pygame.font.SysFont('Arial', 16, bold=True)
-                text = font.render(str(spot.priority), True, BLACK)
+                text = font.render(str(spot.target_priority), True, BLACK)
                 text_rect = text.get_rect(center=(spot.x + spot.width // 2, spot.y + spot.width // 2))
                 win.blit(text, text_rect)
 
-
-
-    # Draw trail path
     for trail in trails:
-        pygame.draw.circle(win, PURPLE, trail.get_center(), 3)
+        if hasattr(trail, 'get_center'):
+            pygame.draw.circle(win, PURPLE, trail.get_center(), 3)
 
-
-
-    # Draw robot and direction
     if robot_center:
         pos_x, pos_y = robot_center
         radius = grid[0][0].width // 3
@@ -43,39 +33,34 @@ def draw(win, grid, rows, width, trails, robot_center, robot, barrier_mode=False
             end_y = pos_y + arrow_length * math.sin(angle)
             pygame.draw.line(win, BLACK, (pos_x, pos_y), (end_x, end_y), 2)
 
-    # Draw grid lines and UI
     draw_grid(win, rows, width)
     draw_ui(win, robot)
-
     pygame.display.update()
 
-
 def draw_ui(win, robot=None):
-    """Draw the user interface sidebar"""
-    pygame.draw.rect(win, SIDEBAR_BG, (WIDTH, 0, SIDEBAR_WIDTH, WIDTH))  # Right sidebar
+    pygame.draw.rect(win, SIDEBAR_BG, (WIDTH, 0, SIDEBAR_WIDTH, WIDTH))
 
     font_title = pygame.font.SysFont('Arial', 24, bold=True)
     font = pygame.font.SysFont('Arial', 18)
 
-    # Title
     title = font_title.render("A* SIMULATOR", True, BLACK)
     win.blit(title, (WIDTH + 20, 20))
 
     instructions = [
         "Controls:",
         "• Left Click: Set Start/Target",
-        "• B: Add Barriers (Toggle)",
-        "• Hold T: Add Traffic Light",
+        "• M: Target Mode",
+        "• B: Barrier Mode",
+        "• T: Traffic Light Mode", 
         "• Right Click: Remove Cell",
         "• Space: Start Simulation",
-        "• C: Clear Grid, R: Reset",
-        "• O: Save Obstacles, P: Load Obstacles",
-        "• S: Save Map, L: Load Map",
-        "• 1-4: Speed (Current: {}x)".format(sim_speed),
-        "• T: Toggle Traffic Tool"
+        "• C: Clear Grid",
+        "• R: Reset",
+        "• S: Save Map",
+        "• L: Load Map",
+        "• 1-4: Speed Control"
     ]
 
     for i, text in enumerate(instructions):
         label = font.render(text, True, BLACK)
-        win.blit(label, (WIDTH + 20, 70 + i * 30))
-    
+        win.blit(label, (WIDTH + 20, 70 + i * 25))
