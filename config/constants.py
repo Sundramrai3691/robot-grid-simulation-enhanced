@@ -1,3 +1,4 @@
+# Color constants
 WHITE = (245, 245, 245)
 BLACK = (20, 20, 20)
 ORANGE = (255, 165, 0)
@@ -11,14 +12,24 @@ DARK_GREEN = (34, 139, 34)
 YELLOW = (255, 255, 0)
 SIDEBAR_BG = (240, 240, 240)
 
+# Trail and animation constants
 TRAIL_LENGTH = 15
 TRAIL_ALPHA = 150
 FADING_SPEED = 5
+
+# Speed and timing constants
 DEFAULT_SPEED = 1
+SPEED_MULTIPLIERS = [0.1, 0.3, 0.5, 1.0]
+
+# Traffic light constants
 TRAFFIC_LIGHT_CYCLE = 5
 
+# Robot constants
 DEFAULT_BATTERY = 100
 DEFAULT_SENSOR_RANGE = 3
 DEFAULT_ROBOT_SPEED = 1
 BATTERY_DRAIN_RATE = 1
-SPEED_MULTIPLIERS = [0.1, 0.3, 0.5, 1.0]
+
+# Movement timing constants
+MOVE_DELAY = 0.4
+PAUSE_DURATION = 2.0
