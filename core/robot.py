@@ -1,19 +1,17 @@
+""" Robot class for pathfinding and movement """
 import pygame
 import time
-import math
 from config.constants import *
 from config.settings import *
 from entities.trail import TrailMarker
 from .astar import a_star
 
 class Robot:
-    def __init__(self, start, targets, grid, draw_func, **params):
+    def __init__(self, start, end, grid, draw_func):
         self.grid = grid
         self.draw = draw_func
         self.start = start
-        self.targets = sorted(targets, key=lambda t: getattr(t, 'target_priority', 1), reverse=True) if targets else []
-        self.current_target = None
-        self.completed_targets = []
+        self.end = end
         self.path = []
         self.index = 0
         self.current = start
@@ -21,188 +19,124 @@ class Robot:
         self.last_move_time = time.time()
         self.paused = False
         self.pause_time = 0
+        # ✅ Track completed targets with priorities
+        self.completed_targets = []
         
-        # Robot parameters
-        self.battery = params.get('battery', DEFAULT_BATTERY)
-        self.max_battery = self.battery
-        self.sensor_range = params.get('sensor_range', DEFAULT_SENSOR_RANGE)
-        self.speed_multiplier = params.get('speed', DEFAULT_ROBOT_SPEED)
-        self.battery_drain_rate = params.get('drain_rate', BATTERY_DRAIN_RATE)
+    def set_new_goal(self, new_goal):
+        # ✅ Mark previous goal as completed
+        if hasattr(self.end, 'priority') and self.end.priority:
+            self.completed_targets.append((self.end.priority, self.end))
+            print(f"✅ Target {self.end.priority} completed!")
         
-        # Statistics
-        self.distance_traveled = 0
-        self.steps_taken = 0
-        self.replan_count = 0
-        self.known_map = {}
-
-    def select_next_target(self):
-        """Select the next target with highest priority that hasn't been completed"""
-        for target in self.targets:
-            if target not in self.completed_targets:
-                if self.test_reachability(target):
-                    self.current_target = target
-                    return target
-        return None
-
-    def test_reachability(self, target):
-        """Test if a target is reachable (placeholder implementation)"""
-        return True
-
-    def update_perception(self):
-        """Update robot's knowledge of the environment within sensor range"""
-        if not self.current:
-            return
-            
-        current_pos = self.current.get_pos()
-        
-        for row in range(max(0, current_pos[0] - self.sensor_range),
-                        min(len(self.grid), current_pos[0] + self.sensor_range + 1)):
-            for col in range(max(0, current_pos[1] - self.sensor_range),
-                           min(len(self.grid[0]), current_pos[1] + self.sensor_range + 1)):
-                distance = math.sqrt((row - current_pos[0])**2 + (col - current_pos[1])**2)
-                if distance <= self.sensor_range:
-                    spot = self.grid[row][col]
-                    self.known_map[(row, col)] = {
-                        'is_barrier': spot.is_barrier(),
-                        'is_dynamic': getattr(spot, 'is_dynamic', lambda: False)(),
-                        'cost': getattr(spot, 'cost', 1)
-                    }
-
-    def recharge_battery(self, amount=None):
-        """Recharge the robot's battery"""
-        if amount is None:
-            self.battery = self.max_battery
-        else:
-            self.battery = min(self.max_battery, self.battery + amount)
+        self.end = new_goal
+        self.trails.append(TrailMarker(
+            self.get_center(), (*PURPLE, TRAIL_ALPHA), self.current.width
+        ))
+        print(f"🎯 New target: Priority {getattr(new_goal, 'priority', 'Unknown')}")
 
     def plan_path(self):
-        """Plan a path to the current target using A* algorithm"""
-        if not self.current_target:
-            self.current_target = self.select_next_target()
-        
-        if not self.current_target:
-            return False
-            
-        # Reset grid for pathfinding
+        """Plan a path from current position to end using A*"""
         for row in self.grid:
             for spot in row:
-                if not spot.is_barrier() and not spot.is_start() and not spot.is_end():
+                if not spot.is_barrier() and not spot.is_start() and not spot.is_end() and not spot.is_dynamic():
                     spot.reset()
                 spot.previous = None
-        
         self.path.clear()
         self.index = 0
         
-        # Run A* algorithm
-        if a_star(self.draw, self.grid, self.start, self.current_target):
+        # ✅ Update neighbors to account for dynamic obstacles
+        for row in self.grid:
+            for spot in row:
+                spot.update_neighbors(self.grid)
+        
+        if a_star(self.draw, self.grid, self.current, self.end):  # Use current position, not start
             self.extract_path()
             return True
         else:
-            # If no path found, mark target as completed and try next
-            self.completed_targets.append(self.current_target)
-            self.current_target = None
-            self.replan_count += 1
-            return self.plan_path()
+            self.draw_fail_overlay()
+            return False
+
+    def draw_fail_overlay(self):
+        """Draw overlay when pathfinding fails"""
+        print("⚠️ Pathfinding failed - no valid path found!")
+        # Could add visual feedback here if needed
 
     def extract_path(self):
-        """Extract the path from A* result"""
-        current = self.current_target
+        """Extract the path from the A* result"""
+        current = self.end
         path = []
-        while hasattr(current, 'previous') and current.previous and current != self.start:
+        while hasattr(current, 'previous') and current.previous and current != self.current:  # Changed from self.start
             path.append(current)
             current = current.previous
-        path.append(self.start)
+        path.append(self.current)  # Changed from self.start
         path.reverse()
         self.path = path
 
     def step(self):
-        """Execute one step of robot movement"""
-        if self.battery <= 0:
-            return False
-        
-        self.update_perception()
         current_time = time.time()
 
-        # Handle pause state (e.g., waiting at traffic light)
         if self.paused:
-            if current_time - self.pause_time >= PAUSE_DURATION:
+            if current_time - self.pause_time >= 2:
                 self.paused = False
             return False
 
-        # Check if enough time has passed for next move
-        move_interval = (MOVE_DELAY / DEFAULT_SPEED) / self.speed_multiplier
-        if current_time - self.last_move_time < move_interval:
+        if current_time - self.last_move_time < 0.4 / DEFAULT_SPEED:
             return True
 
         self.last_move_time = current_time
 
-        # Execute movement if path exists
         if self.index < len(self.path):
             next_spot = self.path[self.index]
 
-            # Check for traffic light
-            if (hasattr(next_spot, 'is_traffic_stop') and 
-                next_spot.is_traffic_stop and 
-                next_spot.light_state != "green"):
+            # ✅ Check for traffic lights
+            if next_spot.is_traffic_stop and next_spot.light_state != "green":
                 self.paused = True
                 self.pause_time = current_time
+                print(f"🚦 Waiting for {next_spot.light_state} light to turn green...")
                 return False
 
-            # Check for obstacles
-            if (next_spot.is_barrier() or 
-                (hasattr(next_spot, 'is_dynamic') and next_spot.is_dynamic())):
-                self.replan_count += 1
-                self.plan_path()
-                return False
+            # ✅ Check for dynamic obstacles or new barriers - replan if found
+            if next_spot.is_barrier() or next_spot.is_dynamic():
+                print("🚧 Path blocked! Replanning...")
+                if not self.plan_path():  # Try to replan
+                    print("❌ Cannot find alternative path!")
+                    return False
+                return False  # Skip this step, try again with new path
 
-            # Add trail marker
+            # ✅ Add trail marker
             self.trails.append(TrailMarker(
                 (self.current.x + self.current.width // 2,
                  self.current.y + self.current.width // 2),
                 (*PURPLE, TRAIL_ALPHA),
-                self.current.width
+                self.current.width // 4
             ))
 
-            # Update trail markers
-            for trail in self.trails[:]:
+            # ✅ Update all trail markers
+            for trail in self.trails:
                 trail.update()
-                if trail.lifetime <= 0:
-                    self.trails.remove(trail)
 
-            # Move to next position
-            if self.current != self.start:  # Don't reset start position
-                self.current.reset()
+            # ✅ Move to next position
+            self.current.reset()
             self.current = next_spot
             self.current.make_start()
             self.index += 1
-            
-            # Update statistics
-            self.battery -= self.battery_drain_rate
-            self.steps_taken += 1
-            if self.index > 0:
-                self.distance_traveled += 1
-                
             return True
         return False
 
     def reached_goal(self):
-        """Check if robot has reached the current target"""
-        if self.current == self.current_target:
-            self.completed_targets.append(self.current_target)
-            self.current_target = None
-            return len(self.completed_targets) == len(self.targets)
-        return False
+        """Check if robot has reached the goal"""
+        return self.current == self.end
 
     def get_center(self):
         """Get the center position of the robot"""
-        if not self.current:
-            return (0, 0)
         return (self.current.x + self.current.width // 2,
                 self.current.y + self.current.width // 2)
-
-    def set_new_goal(self, new_goal):
-        """Set a new goal for the robot"""
-        self.current_target = new_goal
-        self.trails.append(TrailMarker(
-            self.get_center(), (*PURPLE, TRAIL_ALPHA), self.current.width
-        ))
+    
+    # ✅ New method to get completion status
+    def get_completion_status(self):
+        """Get information about completed targets"""
+        return {
+            'completed_count': len(self.completed_targets),
+            'completed_priorities': [priority for priority, _ in self.completed_targets],
+            'current_target_priority': getattr(self.end, 'priority', None)
+        }

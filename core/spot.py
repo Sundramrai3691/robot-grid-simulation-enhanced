@@ -25,6 +25,74 @@ class Spot:
     def get_pos(self):
         """Get the grid position of this spot"""
         return self.row, self.col
+    # Add these methods to your existing Spot class:
+
+def make_dynamic(self):
+    """Make this spot a dynamic obstacle"""
+    self.color = ORANGE  # Use orange color for dynamic obstacles
+
+def is_dynamic(self):
+    """Check if this spot is a dynamic obstacle"""
+    return self.color == ORANGE
+
+# Modify the existing draw method to include dynamic obstacle rendering:
+def draw(self, win):
+    pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.width))
+    
+    # Draw priority numbers for targets
+    if self.is_end() and hasattr(self, 'priority') and self.priority:
+        font = pygame.font.Font(None, 24)
+        text = font.render(str(self.priority), True, WHITE)
+        text_rect = text.get_rect(center=(self.x + self.width//2, self.y + self.width//2))
+        win.blit(text, text_rect)
+    
+    # Draw traffic lights
+    if self.is_traffic_stop:
+        radius = self.width // 4
+        offset = self.width // 4
+        if self.light_state == "green":
+            pygame.draw.circle(win, GREEN,
+                               (self.x + offset, self.y + offset), radius)
+        elif self.light_state == "yellow":
+            pygame.draw.circle(win, YELLOW,
+                               (self.x + self.width // 2, self.y + offset), radius)
+        else:
+            pygame.draw.circle(win, RED,
+                               (self.x + self.width - offset, self.y + offset), radius)
+    
+    # Draw dynamic obstacle indicator (moving animation)
+    if self.is_dynamic():
+        import time
+        # Create a pulsing effect
+        pulse = int(50 * (1 + 0.5 * abs(time.time() * 2 % 2 - 1)))
+        color_with_pulse = (min(255, ORANGE[0] + pulse), 
+                           min(255, ORANGE[1] + pulse), 
+                           min(255, ORANGE[2]))
+        pygame.draw.rect(win, color_with_pulse, (self.x, self.y, self.width, self.width))
+        
+        # Draw movement indicator
+        center_x, center_y = self.x + self.width//2, self.y + self.width//2
+        pygame.draw.circle(win, WHITE, (center_x, center_y), 3)
+
+# Modify the update_neighbors method to handle dynamic obstacles:
+def update_neighbors(self, grid):
+    self.neighbors = []
+    dirs = [(0, 1), (1, 0), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+    for d in dirs:
+        r, c = self.row + d[0], self.col + d[1]
+        if 0 <= r < self.total_rows and 0 <= c < self.total_rows:
+            neighbor = grid[r][c]
+
+            # Check if neighbor is a red traffic light or dynamic obstacle
+            if neighbor.is_traffic_stop and neighbor.light_state == "red":
+                continue  # Skip this neighbor if it's a red light
+            
+            # Dynamic obstacles block movement
+            if neighbor.is_dynamic():
+                continue  # Skip dynamic obstacles
+            
+            if not neighbor.is_barrier():
+                self.neighbors.append(neighbor)
 
     def is_closed(self):
         """Check if this spot is in the closed set (A* algorithm)"""
